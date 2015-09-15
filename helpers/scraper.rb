@@ -2,65 +2,106 @@ require 'rubygems'
 require 'bundler/setup'
 require 'mechanize'
 require 'csv'
-require 'nokogiri'
 require 'pry'
+
+require_relative 'location.rb'
+require_relative 'glassdoor.rb'
 
 class Scraper
   attr_reader :page, :results
 
-  def initialize(job = "Web Developer", location = "Roslyn, NY")
+  def initialize
 
     @agent = Mechanize.new
-    @job = job
-    @location = location
 
     # add rate limit of 500ms between requests
     @agent.history_added = Proc.new { sleep 0.5 }
-    scrap
+
+    @glassdoor = Glassdoor.new
 
   end
 
-  def scrap
+  # grabs default search parameters if user has not input any or if the user just hit the page
+  def grab_search_params(location)
+
+    params = {}
+
+    params[:'search-text'] = "Web Developer"
+    params[:'search-location'] = location
+    params[:'start_date'] = Date.today
+
+    verify_search(params, location)
+
+  end
+
+  # verify user inputs for search parameters
+  # checks if inputs are empty/nil
+  def verify_search(params, location)
+
+    params[:'search-text'] = "Web Developer" if params[:'search-text'].nil? || params[:'search-text'].empty?
+
+    params[:'search-location'] = location if params[:'search-location'].nil? || params[:'search-location'].empty?
+
+    params[:'start-date'] = Date.today if params[:'start-date'].nil? || params[:'start-date'].empty?
+
+    scrap(params)
+
+  end
+
+  def scrap(params)
+
+    # set up parameters
+    job = params[:'search-text']
+    location = params[:'search-location']
+    start_date = params[:'start-date'].to_s
 
     # enter job and location for search query
     @page = @agent.get("http://www.dice.com/")
     page_form = @page.form_with(:action => '/jobs')
-    page_form.q = @job
-    page_form.l = @location
+    page_form.q = job
+    page_form.l = location
 
     # all results contain necessary information under one class
     @results = page_form.submit.search(".//div[@class='serp-result-content']")
 
+    # keep the user_input and job_list for html display purposes
+    user_input = [job, location, start_date]
+    job_list = []
+
     # build final results
-    jobs = build_jobs(@results)
+    @results.each do |entry|
+      jobs = job_details(entry, start_date)
 
-    # save to CSV file
-    save_results(jobs)
-
-  end
-
-  def build_jobs(search_results)
-
-    jobs = []
-    search_results.each do |job|
-
-      job_title = job.at_css('h3 a').text.strip
-      company_name = job.at_css('li a').text.strip
-      post_link = job.at_css('h3 a').attribute('href').value
-      location = job.at_css('li.location').text
-      post_date = get_date(job.at_css('li.posted').text)
-
-      # capture every instance of characters in between '/' and '/'.  only returns the last value which is the company ID
-      company_ID = job.at_css('h3 a').attribute('href').value.scan(/([^\/]*)\//)[-1][0]
-
-      # capture all values before the first question mark
-      job_ID = job.at_css('h3 a').attribute('href').value.match(/([^\/]*)\?/)[1]
-
-      jobs << [job_title, company_name, post_link, location, post_date, company_ID, job_ID]
+      unless jobs.nil?
+        glassdoor_info = glassdoor_profile(jobs)
+        job_list << glassdoor_info
+      end
 
     end
 
-    jobs
+    [user_input, job_list]
+
+  end
+
+  def job_details(job, start_date)
+
+    job_title = job.at_css('h3 a').text.strip
+    company_name = job.at_css('li a').text.strip
+    post_link = job.at_css('h3 a').attribute('href').value
+    location = job.at_css('li.location').text
+    post_date = get_date(job.at_css('li.posted').text)
+
+    return if post_date < start_date
+
+    # capture every instance of characters in between '/' and '/'.  only returns the last value which is the company ID
+    company_ID = job.at_css('h3 a').attribute('href').value.scan(/([^\/]*)\//)[-1][0]
+
+    # capture all values before the first question mark
+    job_ID = job.at_css('h3 a').attribute('href').value.match(/([^\/]*)\?/)[1]
+
+    details = { title: job_title, company: company_name, link: post_link, location: location, date: post_date, co_id: company_ID, job_id: job_ID }
+
+    details
 
   end
 
@@ -80,32 +121,45 @@ class Scraper
 
       # subtract seconds ago
       when "second"
-        Time.at(Time.now.to_i-value).strftime("%m-%d-%Y")
+        Time.at(Time.now.to_i-value).strftime("%Y-%m-%d")
 
       # subtract minutes ago
       when "minute"
-        Time.at(Time.now.to_i-value*60).strftime("%m-%d-%Y")
+        Time.at(Time.now.to_i-value*60).strftime("%Y-%m-%d")
 
       # subtract hours ago
       when "hour"
-        Time.at(Time.now.to_i-value*60*60).strftime("%m-%d-%Y")
+        Time.at(Time.now.to_i-value*60*60).strftime("%Y-%m-%d")
 
       # subtract days ago
       when "day"
-        Time.at(Time.now.to_i-value*60*60*24).strftime("%m-%d-%Y")
+        Time.at(Time.now.to_i-value*60*60*24).strftime("%Y-%m-%d")
 
       # subtract weeks ago
       when "week"
-        Time.at(Time.now.to_i-value*60*60*24*7).strftime("%m-%d-%Y")
+        Time.at(Time.now.to_i-value*60*60*24*7).strftime("%Y-%m-%d")
 
     end
+
+  end
+
+  # obtains the glassdoor profile information and appends it to the job details
+  def glassdoor_profile(job)
+
+    glassdoor_info = job.dup
+    profile = @glassdoor.company_info(job[:company])
+
+    glassdoor_info[:ratings] = profile[:ratings]
+    glassdoor_info[:review] = profile[:review]
+
+    glassdoor_info
 
   end
 
   # saves results to a CSV file
   def save_results(jobs)
 
-    CSV.open('dice_job_directory.csv', 'a') do |csv|
+    CSV.open('dice_job_directory.csv', 'w') do |csv|
       jobs.each do |job|
         csv << job
       end
@@ -115,5 +169,4 @@ class Scraper
 
 end
 
-test = Scraper.new
-test.scrap
+# test.grab_search_params("Great Neck")

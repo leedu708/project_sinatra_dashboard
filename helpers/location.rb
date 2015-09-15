@@ -1,6 +1,5 @@
 require 'json'
 require 'httparty'
-require 'pry-byebug'
 
 class Location
 
@@ -10,12 +9,14 @@ class Location
 
   def initialize
 
+    # grabs geolocation information
     @ip = self.class.get("/geoip/")
 
   end
 
   def grab_location
 
+    # pulls only the city
     response = JSON.parse(@ip.body)
     location = response["city"]
 

@@ -1,0 +1,17 @@
+<td>
+  <div style="max-height: 120px; overflow-y: scroll">
+
+    <% if review == "n/a" %>
+
+      <%= "n/a" %>
+
+    <% else %>
+
+      <p><small>Pros: <%= review["pros"] %><br>
+      Cons: <%= review["cons"] %></small></p>
+
+
+    <% end %>
+
+  </div>
+</td>

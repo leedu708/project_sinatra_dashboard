@@ -1,0 +1,52 @@
+<h1>Job Scraper</h1>
+
+<%= erb :search_bar, :locals => { :query => query } %>
+
+
+
+<table class = 'table table-striped table-bordered table-condensed'>
+
+  <thead>
+
+    <h3>Jobs in <%= query[1] %></h3>
+
+  </thead>
+
+  <tbody>
+
+    <tr>
+      <%= erb :table_headers %>
+    </tr>
+
+
+    <% results.each do |result| %>
+      <tr>
+
+        <% unless result.nil? %>
+          <% result.each do |key, value| %>
+
+            <% if key == :link %>
+              <td><a href=<%= value %> >Link</a></td>
+
+            <% elsif key == :ratings %>
+              <%= erb :company_ratings, :locals => { :ratings => value } %>
+
+            <% elsif key == :review %>
+              <%= erb :featured_review, :locals => { :review => value } %>
+
+            <% else %>
+              <td><%= value %></td>
+            <% end %>
+
+          <% end %>
+        <% end %>
+
+      </tr>
+
+    <% end %>
+
+
+  </tbody>
+
+
+</table>

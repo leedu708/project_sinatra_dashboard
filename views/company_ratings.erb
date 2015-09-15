@@ -1,0 +1,13 @@
+<% if ratings == "none" %>
+
+  <% 7.times do %>
+    <td><%= "none" %></td>
+  <% end %>
+
+<% else %>
+
+  <% ratings.each do |key, value| %>
+    <td><%= value %></td>
+  <% end %>
+
+<% end %>
