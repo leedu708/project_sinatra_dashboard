@@ -8,8 +8,8 @@ class Glassdoor
 
   include HTTParty
   base_uri = "http://api.glassdoor.com"
-  PID = ENV["PARTNER_ID"]
-  API_KEY = ENV["GLASSDOOR_KEY"]
+  PID = "43525"
+  API_KEY = "eHu6ltJqjMm"
 
   # returns hash of company information
   def company_info(company)

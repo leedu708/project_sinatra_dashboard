@@ -79,7 +79,7 @@ class Scraper
 
     end
 
-    [user_input, job_list]
+    [user_input, job_list.uniq]
 
   end
 
